@@ -54,20 +54,25 @@ public class AI extends RealtimeAI<World, KSObject> {
         if (base.getCArea().get(wagent.getPosition()) == ECell.BacklineDelivery) {
             if (getSumBagMaterial(wagent.getMaterialsBag()) > 0)
                 warehouseAgentPutMaterial();
-            else {
+            else if (getSumBagAmmo(base.getBacklineDelivery().getAmmos()) > 0) {
+                warehouseAgentPickAmmo(base.getBacklineDelivery().getAmmos());
+            } else {
                 forwardWagent = false;
                 warehouseAgentMove(false);
             }
-        } else {
-            if (base.getCArea().get(wagent.getPosition()) != ECell.Material)
-                forwardWagent = true;
-            warehouseAgentMove(forwardWagent);
-            if (base.getCArea().get(wagent.getPosition()) == ECell.Material) {
-                Material material = base.getWarehouse().getMaterials().get(wagent.getPosition());
-                var materialType = material.getType();
-                if (wagent.getMaterialsBag().get(materialType) < wantedMaterial.get(materialType) && material.getCount() > 0)
-                    warehouseAgentPickMaterial();
-            }
+        } else if (base.getCArea().get(wagent.getPosition()) == ECell.FrontlineDelivery) {
+            forwardWagent = true;
+            if (getSumBagAmmo(wagent.getAmmosBag()) > 0)
+                warehouseAgentPutAmmo();
+            else
+                warehouseAgentMove(forwardWagent);
+        } else if (base.getCArea().get(wagent.getPosition()) == ECell.Material) {
+            Material material = base.getWarehouse().getMaterials().get(wagent.getPosition());
+            var materialType = material.getType();
+            if (wagent.getMaterialsBag().get(materialType) < wantedMaterial.get(materialType) && material.getCount() > 0)
+                warehouseAgentPickMaterial();
+            else
+                warehouseAgentMove(forwardWagent);
         }
     }
 
