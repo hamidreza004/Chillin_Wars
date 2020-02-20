@@ -20,24 +20,49 @@ public class AI extends RealtimeAI<World, KSObject> {
     @Override
     public void initialize() {
         System.out.println("initialize");
+
+        wantedMaterial.put(MaterialType.Powder, 5);
+        wantedMaterial.put(MaterialType.Iron, 5);
+        wantedMaterial.put(MaterialType.Carbon, 5);
+        wantedMaterial.put(MaterialType.Gold, 0);
+        wantedMaterial.put(MaterialType.Shell, 0);
     }
 
     Agent wagent, fagent;
     Base base;
+    HashMap<MaterialType, Integer> wantedMaterial = new HashMap<>();
+    int turn = 0;
+
+    public void addToWantedMaterial(HashMap<MaterialType, Integer> material){
+        for(MaterialType materialType: MaterialType.values())
+            wantedMaterial.put(materialType, wantedMaterial.get(materialType) + material.get(materialType));
+    }
 
     @Override
     public void decide() {
         System.out.println("decide");
+        turn ++;
         base = this.world.getBases().get(this.mySide);
         wagent = base.getAgents().get(AgentType.Warehouse);
         fagent = base.getAgents().get(AgentType.Factory);
         HashMap<MaterialType, Integer> materialSample = new HashMap<>();
-        materialSample.put(MaterialType.Powder, 5);
-        materialSample.put(MaterialType.Iron, 5);
-        materialSample.put(MaterialType.Carbon, 5);
+        materialSample.put(MaterialType.Powder, 0);
+        materialSample.put(MaterialType.Iron, 0);
+        materialSample.put(MaterialType.Carbon, 0);
         materialSample.put(MaterialType.Gold, 0);
         materialSample.put(MaterialType.Shell, 0);
-        runWareHouseAgent(materialSample);
+        if (turn == 20){
+            materialSample.put(MaterialType.Powder, 5);
+            materialSample.put(MaterialType.Iron, 5);
+            materialSample.put(MaterialType.Carbon, 5);
+        }
+        if (turn == 80){
+            materialSample.put(MaterialType.Powder, 5);
+            materialSample.put(MaterialType.Iron, 5);
+            materialSample.put(MaterialType.Carbon, 5);
+        }
+        addToWantedMaterial(materialSample);
+        runWareHouseAgent();
         HashMap<AmmoType, Integer> ammoSample = new HashMap<>();
         ammoSample.put(AmmoType.RifleBullet, 1);
         ammoSample.put(AmmoType.HMGBullet, 2);
@@ -50,7 +75,7 @@ public class AI extends RealtimeAI<World, KSObject> {
 
     boolean forwardWagent = true;
 
-    public void runWareHouseAgent(HashMap<MaterialType, Integer> wantedMaterial) {
+    public void runWareHouseAgent() {
         if (base.getCArea().get(wagent.getPosition()) == ECell.BacklineDelivery) {
             if (getSumBagMaterial(wagent.getMaterialsBag()) > 0)
                 warehouseAgentPutMaterial();
@@ -69,8 +94,10 @@ public class AI extends RealtimeAI<World, KSObject> {
         } else if (base.getCArea().get(wagent.getPosition()) == ECell.Material) {
             Material material = base.getWarehouse().getMaterials().get(wagent.getPosition());
             var materialType = material.getType();
-            if (wagent.getMaterialsBag().get(materialType) < wantedMaterial.get(materialType) && material.getCount() > 0)
+            if (wantedMaterial.get(materialType) > 0 && material.getCount() > 0 && forwardWagent) {
                 warehouseAgentPickMaterial();
+                wantedMaterial.put(materialType, wantedMaterial.get(materialType) - 1);
+            }
             else
                 warehouseAgentMove(forwardWagent);
         }
