@@ -8,6 +8,8 @@ import ks.KSObject;
 import ks.models.*;
 import ks.commands.*;
 
+import static java.lang.Math.min;
+
 
 public class AI extends RealtimeAI<World, KSObject> {
 
@@ -38,6 +40,18 @@ public class AI extends RealtimeAI<World, KSObject> {
             wantedMaterial.put(materialType, wantedMaterial.get(materialType) + material.get(materialType));
     }
 
+    public HashMap<AmmoType, Integer> wagentPickAmmoList(){
+        HashMap<AmmoType, Integer> selected = new HashMap<>();
+        int empty = wagent.getCAmmosBagCapacity();
+        for (AmmoType ammoType : AmmoType.values()){
+            int a = min(base.getBacklineDelivery().getAmmos().get(ammoType), empty);
+            selected.put(ammoType, a);
+            empty = empty - a;
+        }
+
+        return selected;
+    }
+
     @Override
     public void decide() {
         System.out.println("decide");
@@ -51,7 +65,7 @@ public class AI extends RealtimeAI<World, KSObject> {
         materialSample.put(MaterialType.Carbon, 0);
         materialSample.put(MaterialType.Gold, 0);
         materialSample.put(MaterialType.Shell, 0);
-        if (turn == 20){
+        if (turn == 40){
             materialSample.put(MaterialType.Powder, 5);
             materialSample.put(MaterialType.Iron, 5);
             materialSample.put(MaterialType.Carbon, 5);
@@ -80,7 +94,7 @@ public class AI extends RealtimeAI<World, KSObject> {
             if (getSumBagMaterial(wagent.getMaterialsBag()) > 0)
                 warehouseAgentPutMaterial();
             else if (getSumBagAmmo(base.getBacklineDelivery().getAmmos()) > 0) {
-                warehouseAgentPickAmmo(base.getBacklineDelivery().getAmmos());
+                warehouseAgentPickAmmo(wagentPickAmmoList());
             } else {
                 forwardWagent = false;
                 warehouseAgentMove(false);
