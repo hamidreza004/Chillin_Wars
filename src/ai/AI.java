@@ -52,7 +52,7 @@ public class AI extends RealtimeAI<World, KSObject> {
 
     public void runWareHouseAgent(HashMap<MaterialType, Integer> wantedMaterial) {
         if (base.getCArea().get(wagent.getPosition()) == ECell.BacklineDelivery) {
-            if (getSumBag(wagent.getMaterialsBag()) > 0)
+            if (getSumBagMaterial(wagent.getMaterialsBag()) > 0)
                 warehouseAgentPutMaterial();
             else {
                 forwardWagent = false;
@@ -72,29 +72,42 @@ public class AI extends RealtimeAI<World, KSObject> {
     }
 
     boolean forwardFagent = false;
+    boolean moveFagent = false;
+    Position prePosition;
+    HashMap<AmmoType, Integer> preparingAmmo = new HashMap<>();
 
     void runFactoryAgent(HashMap<AmmoType, Integer> wantedAmmo) {
         if (base.getCArea().get(fagent.getPosition()) == ECell.BacklineDelivery) {
-            if (getSumBag(base.getBacklineDelivery().getMaterials()) > 0)
+            if (getSumBagMaterial(base.getBacklineDelivery().getMaterials()) > 0)
                 factoryAgentPickMaterial(base.getBacklineDelivery().getMaterials());
-            else {
+            else if (getSumBagAmmo(fagent.getAmmosBag()) > 0) {
+                factoryAgentPutAmmo();
+            } else {
                 forwardFagent = true;
                 factoryAgentMove(true);
+                moveFagent = true;
             }
         } else {
-            if (fagent.getPosition().getIndex() == 0)
+            if (moveFagent && prePosition.getIndex().intValue() == fagent.getPosition().getIndex().intValue())
                 forwardFagent = false;
             factoryAgentMove(forwardFagent);
+            moveFagent = true;
             if (base.getCArea().get(fagent.getPosition()) == ECell.Machine) {
                 Machine machine = base.getFactory().getMachines().get(fagent.getPosition());
                 var machineStatus = machine.getStatus();
-                if (machineStatus == MachineStatus.AmmoReady)
+                if (machineStatus == MachineStatus.AmmoReady) {
+                    preparingAmmo.put(machine.getCurrentAmmo(), preparingAmmo.get(machine.getCurrentAmmo()) + 1);
                     factoryAgentPickAmmo();
-                else if (machineStatus == MachineStatus.Idle) {
+                    moveFagent = false;
+                } else if (machineStatus == MachineStatus.Idle) {
                     for (AmmoType ammoType : AmmoType.values()) {
                         Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
-                        if (fagent.getAmmosBag().get(ammoType) < wantedAmmo.get(ammoType) && isSubBag(requireMaterial, fagent.getMaterialsBag())) {
+                        if (!preparingAmmo.containsKey(ammoType))
+                            preparingAmmo.put(ammoType, 0);
+                        if (preparingAmmo.get(ammoType) < wantedAmmo.get(ammoType) && isSubBag(requireMaterial, fagent.getMaterialsBag())) {
                             factoryAgentPutMaterial(ammoType);
+                            preparingAmmo.put(ammoType, preparingAmmo.get(ammoType) + 1);
+                            moveFagent = false;
                             break;
                         }
                     }
@@ -102,19 +115,30 @@ public class AI extends RealtimeAI<World, KSObject> {
             }
 
         }
+        prePosition = fagent.getPosition();
     }
 
-    public int getSumBag(Map<MaterialType, Integer> bag) {
+    public int getSumBagMaterial(Map<MaterialType, Integer> bag) {
         int sum = 0;
         for (MaterialType materialType : MaterialType.values())
             sum += bag.get(materialType);
         return sum;
     }
 
+    public int getSumBagAmmo(Map<AmmoType, Integer> bag) {
+        int sum = 0;
+        for (AmmoType ammoType : AmmoType.values())
+            sum += bag.get(ammoType);
+        return sum;
+    }
+
     public boolean isSubBag(Map<MaterialType, Integer> sub, Map<MaterialType, Integer> mother) {
-        for (MaterialType materialType : MaterialType.values())
+        for (MaterialType materialType : MaterialType.values()) {
+            if (!sub.containsKey(materialType))
+                continue;
             if (sub.get(materialType) > mother.get(materialType))
                 return false;
+        }
         return true;
     }
 
