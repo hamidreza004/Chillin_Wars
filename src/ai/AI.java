@@ -78,12 +78,12 @@ public class AI extends RealtimeAI<World, KSObject> {
             if (getSumBag(base.getBacklineDelivery().getMaterials()) > 0)
                 factoryAgentPickMaterial(base.getBacklineDelivery().getMaterials());
             else {
-				forwardFagent = true;
-				factoryAgentMove(true);
-			}
+                forwardFagent = true;
+                factoryAgentMove(true);
+            }
         } else {
-        	if (fagent.getPosition().getIndex() == 0)
-        		forwardFagent = false;
+            if (fagent.getPosition().getIndex() == 0)
+                forwardFagent = false;
             factoryAgentMove(forwardFagent);
             if (base.getCArea().get(fagent.getPosition()) == ECell.Machine) {
                 Machine machine = base.getFactory().getMachines().get(fagent.getPosition());
@@ -91,18 +91,18 @@ public class AI extends RealtimeAI<World, KSObject> {
                 if (machineStatus == MachineStatus.AmmoReady)
                     factoryAgentPickAmmo();
                 else if (machineStatus == MachineStatus.Idle) {
-                    for (AmmoType ammoType : AmmoType.values())
-                        if (fagent.getAmmosBag().get(ammoType) < wantedAmmo.get(ammoType)) {
+                    for (AmmoType ammoType : AmmoType.values()) {
+                        Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
+                        if (fagent.getAmmosBag().get(ammoType) < wantedAmmo.get(ammoType) && isSubBag(requireMaterial, fagent.getMaterialsBag())) {
                             factoryAgentPutMaterial(ammoType);
                             break;
                         }
+                    }
                 }
             }
 
         }
     }
-
-    // Warehouse Agent Commands
 
     public int getSumBag(Map<MaterialType, Integer> bag) {
         int sum = 0;
@@ -110,6 +110,15 @@ public class AI extends RealtimeAI<World, KSObject> {
             sum += bag.get(materialType);
         return sum;
     }
+
+    public boolean isSubBag(Map<MaterialType, Integer> sub, Map<MaterialType, Integer> mother) {
+        for (MaterialType materialType : MaterialType.values())
+            if (sub.get(materialType) > mother.get(materialType))
+                return false;
+        return true;
+    }
+
+    // Warehouse Agent Commands
 
     public void warehouseAgentMove(boolean forward) {
         boolean fw = forward;
