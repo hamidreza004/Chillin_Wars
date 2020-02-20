@@ -11,165 +11,184 @@ import ks.commands.*;
 
 public class AI extends RealtimeAI<World, KSObject> {
 
-	private Random random = new Random();
-	private int stage = 0;
+    //private Random random = new Random();
 
-	public AI(World world) {
-		super(world);
-	}
+    public AI(World world) {
+        super(world);
+    }
 
-	@Override
-	public void initialize() {
-		System.out.println("initialize");
-	}
+    @Override
+    public void initialize() {
+        System.out.println("initialize");
+    }
 
-	@Override
-	public void decide() {
-		System.out.println("decide");
+    Agent wagent, fagent;
+    Base base;
 
-		var base = this.world.getBases().get(this.mySide);
-		var wagent = base.getAgents().get(AgentType.Warehouse);
-		var fagent = base.getAgents().get(AgentType.Factory);
+    @Override
+    public void decide() {
+        System.out.println("decide");
+        base = this.world.getBases().get(this.mySide);
+        wagent = base.getAgents().get(AgentType.Warehouse);
+        fagent = base.getAgents().get(AgentType.Factory);
+        HashMap<MaterialType, Integer> materialSample = new HashMap<>();
+        materialSample.put(MaterialType.Powder, 5);
+        materialSample.put(MaterialType.Iron, 5);
+        materialSample.put(MaterialType.Carbon, 5);
+        materialSample.put(MaterialType.Gold, 0);
+        materialSample.put(MaterialType.Shell, 0);
+        runWareHouseAgent(materialSample);
+        HashMap<AmmoType, Integer> ammoSample = new HashMap<>();
+        ammoSample.put(AmmoType.RifleBullet, 1);
+        ammoSample.put(AmmoType.HMGBullet, 2);
+        ammoSample.put(AmmoType.GoldenTankShell, 0);
+        ammoSample.put(AmmoType.MortarShell, 0);
+        ammoSample.put(AmmoType.TankShell, 0);
+        runFactoryAgent(ammoSample);
 
-		if (stage == 0)
-		{
-			warehouseAgentMove(true);
+    }
 
-			if (base.getCArea().get(wagent.getPosition()) == ECell.Material)
-			{
-				var materialType = base.getWarehouse().getMaterials().get(wagent.getPosition()).getType();
-				if (wagent.getMaterialsBag().get(materialType) == 0)
-					warehouseAgentPickMaterial();
-			}
-			else if (base.getCArea().get(wagent.getPosition()) == ECell.BacklineDelivery)
-			{
-				warehouseAgentPutMaterial();
-				stage++;
-			}
-		}
-		else if (stage == 1)
-		{
-			if (base.getCArea().get(fagent.getPosition()) == ECell.BacklineDelivery)
-			{
-				Map<MaterialType, Integer> requiredMaterials = base.getFactory().getCMixtureFormulas().get(AmmoType.RifleBullet);
-				factoryAgentPickMaterial(requiredMaterials);
-				stage++;
-			}
-			else
-				factoryAgentMove(false);
-		}
-		else if (stage == 2)
-		{
-			if (base.getCArea().get(fagent.getPosition()) == ECell.Machine &&
-				base.getFactory().getMachines().get(fagent.getPosition()).getStatus() == MachineStatus.Idle)
-			{
-				factoryAgentPutMaterial(AmmoType.RifleBullet);
-				stage++;
-			}
-			else
+    boolean forwardWagent = true;
+
+    public void runWareHouseAgent(HashMap<MaterialType, Integer> wantedMaterial) {
+        if (base.getCArea().get(wagent.getPosition()) == ECell.BacklineDelivery) {
+            if (getSumBag(wagent.getMaterialsBag()) > 0)
+                warehouseAgentPutMaterial();
+            else {
+                forwardWagent = false;
+                warehouseAgentMove(false);
+            }
+        } else {
+            if (base.getCArea().get(wagent.getPosition()) != ECell.Material)
+                forwardWagent = true;
+            warehouseAgentMove(forwardWagent);
+            if (base.getCArea().get(wagent.getPosition()) == ECell.Material) {
+                Material material = base.getWarehouse().getMaterials().get(wagent.getPosition());
+                var materialType = material.getType();
+                if (wagent.getMaterialsBag().get(materialType) < wantedMaterial.get(materialType) && material.getCount() > 0)
+                    warehouseAgentPickMaterial();
+            }
+        }
+    }
+
+    boolean forwardFagent = false;
+
+    void runFactoryAgent(HashMap<AmmoType, Integer> wantedAmmo) {
+        if (base.getCArea().get(fagent.getPosition()) == ECell.BacklineDelivery) {
+            if (getSumBag(base.getBacklineDelivery().getMaterials()) > 0)
+                factoryAgentPickMaterial(base.getBacklineDelivery().getMaterials());
+            else {
+				forwardFagent = true;
 				factoryAgentMove(true);
-		}
-		else if (stage == 3)
-		{
-			if (base.getFactory().getMachines().get(fagent.getPosition()).getStatus() == MachineStatus.AmmoReady)
-			{
-				factoryAgentPickAmmo();
-				stage++;
 			}
-		}
-		else if (stage == 4)
-		{
-			if (base.getCArea().get(fagent.getPosition()) == ECell.BacklineDelivery)
-			{
-				factoryAgentPutAmmo();
-				stage++;
-			}
-			else
-				factoryAgentMove(false);
-		}
-		else if (stage == 5)
-		{
-			Map<AmmoType, Integer> ammos = Map.of(
-				AmmoType.RifleBullet, 1
-			);
-			warehouseAgentPickAmmo(ammos);
-			stage++;
-		}
-		else if (stage == 6)
-		{
-			if (base.getCArea().get(wagent.getPosition()) == ECell.FrontlineDelivery)
-			{
-				warehouseAgentPutAmmo();
-				stage = 0;
-			}
-			else
-				warehouseAgentMove(false);
-		}
-	}
-	
-	
-	// Warehouse Agent Commands
+        } else {
+        	if (fagent.getPosition().getIndex() == 0)
+        		forwardFagent = false;
+            factoryAgentMove(forwardFagent);
+            if (base.getCArea().get(fagent.getPosition()) == ECell.Machine) {
+                Machine machine = base.getFactory().getMachines().get(fagent.getPosition());
+                var machineStatus = machine.getStatus();
+                if (machineStatus == MachineStatus.AmmoReady)
+                    factoryAgentPickAmmo();
+                else if (machineStatus == MachineStatus.Idle) {
+                    for (AmmoType ammoType : AmmoType.values())
+                        if (fagent.getAmmosBag().get(ammoType) < wantedAmmo.get(ammoType)) {
+                            factoryAgentPutMaterial(ammoType);
+                            break;
+                        }
+                }
+            }
 
-	public void warehouseAgentMove(boolean forward)
-	{
-		boolean fw = forward;
-		this.sendCommand(new Move() {{ agentType = CommandAgentType.Warehouse; forward = fw; }});
-	}
+        }
+    }
 
-	public void warehouseAgentPickMaterial()
-	{
-		var m = new HashMap<CommandMaterialType, Integer>();
-		this.sendCommand(new PickMaterial() {{ agentType = CommandAgentType.Warehouse; materials = m; }});
-	}
+    // Warehouse Agent Commands
 
-	public void warehouseAgentPutMaterial()
-	{
-		this.sendCommand(new PutMaterial() {{ agentType = CommandAgentType.Warehouse; desiredAmmo = CommandAmmoType.RifleBullet; }});
-	}
+    public int getSumBag(Map<MaterialType, Integer> bag) {
+        int sum = 0;
+        for (MaterialType materialType : MaterialType.values())
+            sum += bag.get(materialType);
+        return sum;
+    }
 
-	public void warehouseAgentPickAmmo(Map<AmmoType, Integer> ammos)
-	{
-		var convertedAmmos = new HashMap<CommandAmmoType, Integer>();
-		for (var entry: ammos.entrySet())
-			convertedAmmos.put(CommandAmmoType.of(entry.getKey().getValue()), entry.getValue());
-		this.sendCommand(new PickAmmo() {{ agentType = CommandAgentType.Warehouse; ammos = convertedAmmos; }});
-	}
+    public void warehouseAgentMove(boolean forward) {
+        boolean fw = forward;
+        this.sendCommand(new Move() {{
+            agentType = CommandAgentType.Warehouse;
+            forward = fw;
+        }});
+    }
 
-	public void warehouseAgentPutAmmo()
-	{
-		this.sendCommand(new PutAmmo() {{ agentType = CommandAgentType.Warehouse; }});
-	}
-	
-	// Factory Agent Commands
+    public void warehouseAgentPickMaterial() {
+        var m = new HashMap<CommandMaterialType, Integer>();
+        this.sendCommand(new PickMaterial() {{
+            agentType = CommandAgentType.Warehouse;
+            materials = m;
+        }});
+    }
 
-	public void factoryAgentMove(boolean forward)
-	{
-		boolean fw = forward;
-		this.sendCommand(new Move() {{ agentType = CommandAgentType.Factory; forward = fw; }});
-	}
+    public void warehouseAgentPutMaterial() {
+        this.sendCommand(new PutMaterial() {{
+            agentType = CommandAgentType.Warehouse;
+            desiredAmmo = CommandAmmoType.RifleBullet;
+        }});
+    }
 
-	public void factoryAgentPickMaterial(Map<MaterialType, Integer> materials)
-	{
-		var convertedMaterials = new HashMap<CommandMaterialType, Integer>();
-		for (var entry: materials.entrySet())
-			convertedMaterials.put(CommandMaterialType.of(entry.getKey().getValue()), entry.getValue());
-		this.sendCommand(new PickMaterial() {{ agentType = CommandAgentType.Factory; materials = convertedMaterials; }});
-	}
+    public void warehouseAgentPickAmmo(Map<AmmoType, Integer> ammos) {
+        var convertedAmmos = new HashMap<CommandAmmoType, Integer>();
+        for (var entry : ammos.entrySet())
+            convertedAmmos.put(CommandAmmoType.of(entry.getKey().getValue()), entry.getValue());
+        this.sendCommand(new PickAmmo() {{
+            agentType = CommandAgentType.Warehouse;
+            ammos = convertedAmmos;
+        }});
+    }
 
-	public void factoryAgentPutMaterial(AmmoType desiredAmmo)
-	{
-		var da = CommandAmmoType.of(desiredAmmo.getValue());
-		this.sendCommand(new PutMaterial() {{ agentType = CommandAgentType.Factory; desiredAmmo = da; }});
-	}
+    public void warehouseAgentPutAmmo() {
+        this.sendCommand(new PutAmmo() {{
+            agentType = CommandAgentType.Warehouse;
+        }});
+    }
 
-	public void factoryAgentPickAmmo()
-	{
-		var a = new HashMap<CommandAmmoType, Integer>();
-		this.sendCommand(new PickAmmo() {{ agentType = CommandAgentType.Factory; ammos = a; }});
-	}
+    // Factory Agent Commands
 
-	public void factoryAgentPutAmmo()
-	{
-		this.sendCommand(new PutAmmo() {{ agentType = CommandAgentType.Factory; }});
-	}
+    public void factoryAgentMove(boolean forward) {
+        boolean fw = forward;
+        this.sendCommand(new Move() {{
+            agentType = CommandAgentType.Factory;
+            forward = fw;
+        }});
+    }
+
+    public void factoryAgentPickMaterial(Map<MaterialType, Integer> materials) {
+        var convertedMaterials = new HashMap<CommandMaterialType, Integer>();
+        for (var entry : materials.entrySet())
+            convertedMaterials.put(CommandMaterialType.of(entry.getKey().getValue()), entry.getValue());
+        this.sendCommand(new PickMaterial() {{
+            agentType = CommandAgentType.Factory;
+            materials = convertedMaterials;
+        }});
+    }
+
+    public void factoryAgentPutMaterial(AmmoType desiredAmmo) {
+        var da = CommandAmmoType.of(desiredAmmo.getValue());
+        this.sendCommand(new PutMaterial() {{
+            agentType = CommandAgentType.Factory;
+            desiredAmmo = da;
+        }});
+    }
+
+    public void factoryAgentPickAmmo() {
+        var a = new HashMap<CommandAmmoType, Integer>();
+        this.sendCommand(new PickAmmo() {{
+            agentType = CommandAgentType.Factory;
+            ammos = a;
+        }});
+    }
+
+    public void factoryAgentPutAmmo() {
+        this.sendCommand(new PutAmmo() {{
+            agentType = CommandAgentType.Factory;
+        }});
+    }
 }
