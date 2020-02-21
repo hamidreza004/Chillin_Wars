@@ -33,20 +33,28 @@ public class AI extends RealtimeAI<World, KSObject> {
                     lastMachineIndex = machine.getPosition().getIndex();
             }
 
-        wantedMaterial.put(MaterialType.Powder, 5);
-        wantedMaterial.put(MaterialType.Iron, 5);
-        wantedMaterial.put(MaterialType.Carbon, 5);
-        wantedMaterial.put(MaterialType.Gold, 0);
-        wantedMaterial.put(MaterialType.Shell, 0);
-
-        wantedAmmo.put(AmmoType.RifleBullet, 1);
-        wantedAmmo.put(AmmoType.HMGBullet, 2);
-        wantedAmmo.put(AmmoType.GoldenTankShell, 0);
-        wantedAmmo.put(AmmoType.MortarShell, 0);
-        wantedAmmo.put(AmmoType.TankShell, 0);
+        assignMaterialMap(wantedMaterial, 5, 5, 5, 0, 0);
+        assignAmmoMap(wantedAmmo, 1, 0, 2, 0, 0);
+        assignAmmoMap(fagentWantedAmmo, 0, 0, 0, 0, 0);
+        addToAmmoMap(fagentWantedAmmo, wantedAmmo);
 
     }
 
+    public void assignMaterialMap(Map<MaterialType, Integer> material, Integer powder, Integer iron, Integer carbon, Integer gold, Integer shell) {
+        material.put(MaterialType.Powder, powder);
+        material.put(MaterialType.Iron, iron);
+        material.put(MaterialType.Carbon, carbon);
+        material.put(MaterialType.Gold, gold);
+        material.put(MaterialType.Shell, shell);
+    }
+
+    public void assignAmmoMap(Map<AmmoType, Integer> ammo, Integer rifleBullet, Integer tankShell, Integer hmgBullet, Integer mortarShell, Integer goldenTankShell) {
+        ammo.put(AmmoType.RifleBullet, rifleBullet);
+        ammo.put(AmmoType.TankShell, tankShell);
+        ammo.put(AmmoType.HMGBullet, hmgBullet);
+        ammo.put(AmmoType.MortarShell, mortarShell);
+        ammo.put(AmmoType.GoldenTankShell, goldenTankShell);
+    }
 
     Agent wagent, fagent;
     Base base;
@@ -55,15 +63,16 @@ public class AI extends RealtimeAI<World, KSObject> {
     int turn = 0;
     Integer lastMachineIndex;
 
-    public void addToWantedMaterial(HashMap<MaterialType, Integer> material) {
+    public void addToMaterialMap(Map<MaterialType, Integer> main, Map<MaterialType, Integer> toAdd) {
         for (MaterialType materialType : MaterialType.values())
-            wantedMaterial.put(materialType, wantedMaterial.get(materialType) + material.get(materialType));
+            main.put(materialType, main.get(materialType) + toAdd.get(materialType));
     }
 
-    public void addToWantedAmmo(HashMap<AmmoType, Integer> ammo) {
+    public void addToAmmoMap(Map<AmmoType, Integer> main, Map<AmmoType, Integer> toAdd) {
         for (AmmoType ammoType : AmmoType.values())
-            wantedAmmo.put(ammoType, wantedAmmo.get(ammoType) + ammo.get(ammoType));
+            main.put(ammoType, main.get(ammoType) + toAdd.get(ammoType));
     }
+
 
     public HashMap<AmmoType, Integer> wagentPickAmmoList() {
         HashMap<AmmoType, Integer> selected = new HashMap<>();
@@ -77,15 +86,22 @@ public class AI extends RealtimeAI<World, KSObject> {
         return selected;
     }
 
+    HashMap<AmmoType, Integer> fagentWantedAmmo = new HashMap<>();
+
     public HashMap<MaterialType, Integer> fagentPickMaterialList() {
         HashMap<MaterialType, Integer> selected = new HashMap<>();
+        assignMaterialMap(selected, 0, 0, 0, 0, 0);
         int empty = fagent.getCMaterialsBagCapacity();
-        for (MaterialType materialType : MaterialType.values()) {
-            int a = min(base.getBacklineDelivery().getMaterials().get(materialType), empty);
-            selected.put(materialType, a);
-            empty = empty - a;
-        }
+        for (AmmoType ammoType : AmmoType.values()) {
+            Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
+            while (fagentWantedAmmo.get(ammoType) > 0)
+                if (isSubBag(requireMaterial, base.getBacklineDelivery().getMaterials()) && getSumBagMaterial(requireMaterial) <= empty) {
+                    addToMaterialMap(selected, requireMaterial);
+                    fagentWantedAmmo.put(ammoType, fagentWantedAmmo.get(ammoType) - 1);
+                    empty -= getSumBagMaterial(requireMaterial);
+                }
 
+        }
         return selected;
     }
 
@@ -98,33 +114,17 @@ public class AI extends RealtimeAI<World, KSObject> {
         fagent = base.getAgents().get(AgentType.Factory);
 
         HashMap<MaterialType, Integer> materialSample = new HashMap<>();
-        materialSample.put(MaterialType.Powder, 0);
-        materialSample.put(MaterialType.Iron, 0);
-        materialSample.put(MaterialType.Carbon, 0);
-        materialSample.put(MaterialType.Gold, 0);
-        materialSample.put(MaterialType.Shell, 0);
-        if (turn == 40) {
-            materialSample.put(MaterialType.Powder, 5);
-            materialSample.put(MaterialType.Iron, 5);
-            materialSample.put(MaterialType.Carbon, 5);
-        }
-        if (turn == 80) {
-            materialSample.put(MaterialType.Powder, 5);
-            materialSample.put(MaterialType.Iron, 5);
-            materialSample.put(MaterialType.Carbon, 5);
-        }
-        addToWantedMaterial(materialSample);
+        assignMaterialMap(materialSample, 0, 0, 0, 0, 0);
+        if (turn == 40 || turn == 80)
+            assignMaterialMap(materialSample, 5, 5, 5, 0, 0);
+        addToMaterialMap(wantedMaterial, materialSample);
         runWareHouseAgent();
 
         HashMap<AmmoType, Integer> ammoSample = new HashMap<>();
-        ammoSample.put(AmmoType.RifleBullet, 0);
-        ammoSample.put(AmmoType.HMGBullet, 0);
-        ammoSample.put(AmmoType.GoldenTankShell, 0);
-        ammoSample.put(AmmoType.MortarShell, 0);
-        ammoSample.put(AmmoType.TankShell, 0);
-        addToWantedAmmo(ammoSample);
+        assignAmmoMap(ammoSample, 0, 0, 0, 0, 0);
+        addToAmmoMap(wantedAmmo, ammoSample);
+        addToAmmoMap(fagentWantedAmmo, ammoSample);
         runFactoryAgent();
-
     }
 
     boolean forwardWagent = true;
@@ -158,7 +158,6 @@ public class AI extends RealtimeAI<World, KSObject> {
     }
 
     boolean forwardFagent = false;
-    HashMap<AmmoType, Integer> preparingAmmo = new HashMap<>();
 
     void runFactoryAgent() {
         if (base.getCArea().get(fagent.getPosition()) == ECell.BacklineDelivery) {
@@ -191,7 +190,6 @@ public class AI extends RealtimeAI<World, KSObject> {
             Machine machine = base.getFactory().getMachines().get(fagent.getPosition());
             var machineStatus = machine.getStatus();
             if (machineStatus == MachineStatus.AmmoReady) {
-                preparingAmmo.put(machine.getCurrentAmmo(), preparingAmmo.get(machine.getCurrentAmmo()) + 1);
                 factoryAgentPickAmmo();
             } else if (machineStatus == MachineStatus.Idle) {
                 boolean isBuild = false;
