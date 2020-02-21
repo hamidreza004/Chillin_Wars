@@ -43,6 +43,12 @@ public class AI extends RealtimeAI<World, KSObject> {
         wAgent.runWareHouseAgent();
 
         HashMap<AmmoType, Integer> ammoSample = new HashMap<>();
+        if (turn == 70)
+        {
+            AgentHelper.assignAmmoMap(ammoSample, 2, 0, 1, 0, 0);
+            AgentHelper.addToAmmoMap(fAgent.wantedAmmo, ammoSample);
+            AgentHelper.addToAmmoMap(fAgent.fagentWantedAmmo, ammoSample);
+        }
         AgentHelper.assignAmmoMap(ammoSample, 0, 0, 0, 0, 0);
         AgentHelper.addToAmmoMap(fAgent.wantedAmmo, ammoSample);
         AgentHelper.addToAmmoMap(fAgent.fagentWantedAmmo, ammoSample);

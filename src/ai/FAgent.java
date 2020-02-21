@@ -31,8 +31,7 @@ public class FAgent {
         AgentHelper.addToAmmoMap(fagentWantedAmmo, wantedAmmo);
     }
 
-    public void updateResources(Base base, AI ai)
-    {
+    public void updateResources(Base base, AI ai) {
         this.gameAgent = base.getAgents().get(AgentType.Factory);
         this.base = base;
         this.ai = ai;
@@ -63,6 +62,7 @@ public class FAgent {
                 factoryAgentPutAmmo();
             else {
                 var pickMaterialList = fagentPickMaterialList();
+                System.out.println(AgentHelper.getSumBagMaterial(pickMaterialList));
                 if (AgentHelper.getSumBagMaterial(pickMaterialList) > 0)
                     factoryAgentPickMaterial(pickMaterialList);
                 else {
