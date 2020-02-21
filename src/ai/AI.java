@@ -65,7 +65,8 @@ public class AI extends RealtimeAI<World, KSObject> {
 
     public void addToMaterialMap(Map<MaterialType, Integer> main, Map<MaterialType, Integer> toAdd) {
         for (MaterialType materialType : MaterialType.values())
-            main.put(materialType, main.get(materialType) + toAdd.get(materialType));
+            if (toAdd.containsKey(materialType))
+                main.put(materialType, main.get(materialType) + toAdd.get(materialType));
     }
 
     public void addToAmmoMap(Map<AmmoType, Integer> main, Map<AmmoType, Integer> toAdd) {
@@ -164,23 +165,26 @@ public class AI extends RealtimeAI<World, KSObject> {
             forwardFagent = true;
             if (getSumBagAmmo(fagent.getAmmosBag()) > 0)
                 factoryAgentPutAmmo();
-            else if (getSumBagMaterial(base.getBacklineDelivery().getMaterials()) > 0)
-                factoryAgentPickMaterial(fagentPickMaterialList());
             else {
-                boolean canBuild = false;
-                for (AmmoType ammoType : AmmoType.values()) {
-                    Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
-                    if (isSubBag(requireMaterial, fagent.getMaterialsBag())) {
-                        canBuild = true;
-                        break;
+                var pickMaterialList = fagentPickMaterialList();
+                if (getSumBagMaterial(pickMaterialList) > 0)
+                    factoryAgentPickMaterial(pickMaterialList);
+                else {
+                    boolean canBuild = false;
+                    for (AmmoType ammoType : AmmoType.values()) {
+                        Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
+                        if (isSubBag(requireMaterial, fagent.getMaterialsBag())) {
+                            canBuild = true;
+                            break;
+                        }
                     }
-                }
-                for (Machine machine : base.getFactory().getMachines().values()) {
-                    if (machine == null)
-                        continue;
-                    if (machine.getStatus() == MachineStatus.AmmoReady || (machine.getStatus() == MachineStatus.Idle && canBuild) || (machine.getStatus() == MachineStatus.Working && abs(machine.getPosition().getIndex().intValue() - fagent.getPosition().getIndex().intValue()) >= machine.getConstructionRemTime())) {
-                        factoryAgentMove(forwardFagent);
-                        break;
+                    for (Machine machine : base.getFactory().getMachines().values()) {
+                        if (machine == null)
+                            continue;
+                        if (machine.getStatus() == MachineStatus.AmmoReady || (machine.getStatus() == MachineStatus.Idle && canBuild) || (machine.getStatus() == MachineStatus.Working && abs(machine.getPosition().getIndex().intValue() - fagent.getPosition().getIndex().intValue()) >= machine.getConstructionRemTime())) {
+                            factoryAgentMove(forwardFagent);
+                            break;
+                        }
                     }
                 }
             }
@@ -216,7 +220,8 @@ public class AI extends RealtimeAI<World, KSObject> {
     public int getSumBagMaterial(Map<MaterialType, Integer> bag) {
         int sum = 0;
         for (MaterialType materialType : MaterialType.values())
-            sum += bag.get(materialType);
+            if (bag.containsKey(materialType))
+                sum += bag.get(materialType);
         return sum;
     }
 
