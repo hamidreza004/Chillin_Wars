@@ -8,6 +8,7 @@ import ks.KSObject;
 import ks.models.*;
 import ks.commands.*;
 
+import static java.lang.Math.abs;
 import static java.lang.Math.min;
 
 
@@ -23,29 +24,65 @@ public class AI extends RealtimeAI<World, KSObject> {
     public void initialize() {
         System.out.println("initialize");
 
+        base = this.world.getBases().get(this.mySide);
+        fagent = base.getAgents().get(AgentType.Factory);
+        lastMachineIndex = fagent.getPosition().getIndex();
+        for (Machine machine : base.getFactory().getMachines().values())
+            if (machine != null) {
+                if (abs(machine.getPosition().getIndex().intValue() - fagent.getPosition().getIndex().intValue()) > abs(lastMachineIndex.intValue() - fagent.getPosition().getIndex().intValue()))
+                    lastMachineIndex = machine.getPosition().getIndex();
+            }
+
         wantedMaterial.put(MaterialType.Powder, 5);
         wantedMaterial.put(MaterialType.Iron, 5);
         wantedMaterial.put(MaterialType.Carbon, 5);
         wantedMaterial.put(MaterialType.Gold, 0);
         wantedMaterial.put(MaterialType.Shell, 0);
+
+        wantedAmmo.put(AmmoType.RifleBullet, 1);
+        wantedAmmo.put(AmmoType.HMGBullet, 2);
+        wantedAmmo.put(AmmoType.GoldenTankShell, 0);
+        wantedAmmo.put(AmmoType.MortarShell, 0);
+        wantedAmmo.put(AmmoType.TankShell, 0);
+
     }
+
 
     Agent wagent, fagent;
     Base base;
     HashMap<MaterialType, Integer> wantedMaterial = new HashMap<>();
+    HashMap<AmmoType, Integer> wantedAmmo = new HashMap<>();
     int turn = 0;
+    Integer lastMachineIndex;
 
-    public void addToWantedMaterial(HashMap<MaterialType, Integer> material){
-        for(MaterialType materialType: MaterialType.values())
+    public void addToWantedMaterial(HashMap<MaterialType, Integer> material) {
+        for (MaterialType materialType : MaterialType.values())
             wantedMaterial.put(materialType, wantedMaterial.get(materialType) + material.get(materialType));
     }
 
-    public HashMap<AmmoType, Integer> wagentPickAmmoList(){
+    public void addToWantedAmmo(HashMap<AmmoType, Integer> ammo) {
+        for (AmmoType ammoType : AmmoType.values())
+            wantedAmmo.put(ammoType, wantedAmmo.get(ammoType) + ammo.get(ammoType));
+    }
+
+    public HashMap<AmmoType, Integer> wagentPickAmmoList() {
         HashMap<AmmoType, Integer> selected = new HashMap<>();
         int empty = wagent.getCAmmosBagCapacity();
-        for (AmmoType ammoType : AmmoType.values()){
+        for (AmmoType ammoType : AmmoType.values()) {
             int a = min(base.getBacklineDelivery().getAmmos().get(ammoType), empty);
             selected.put(ammoType, a);
+            empty = empty - a;
+        }
+
+        return selected;
+    }
+
+    public HashMap<MaterialType, Integer> fagentPickMaterialList() {
+        HashMap<MaterialType, Integer> selected = new HashMap<>();
+        int empty = fagent.getCMaterialsBagCapacity();
+        for (MaterialType materialType : MaterialType.values()) {
+            int a = min(base.getBacklineDelivery().getMaterials().get(materialType), empty);
+            selected.put(materialType, a);
             empty = empty - a;
         }
 
@@ -55,35 +92,38 @@ public class AI extends RealtimeAI<World, KSObject> {
     @Override
     public void decide() {
         System.out.println("decide");
-        turn ++;
+        turn++;
         base = this.world.getBases().get(this.mySide);
         wagent = base.getAgents().get(AgentType.Warehouse);
         fagent = base.getAgents().get(AgentType.Factory);
+
         HashMap<MaterialType, Integer> materialSample = new HashMap<>();
         materialSample.put(MaterialType.Powder, 0);
         materialSample.put(MaterialType.Iron, 0);
         materialSample.put(MaterialType.Carbon, 0);
         materialSample.put(MaterialType.Gold, 0);
         materialSample.put(MaterialType.Shell, 0);
-        if (turn == 40){
+        if (turn == 40) {
             materialSample.put(MaterialType.Powder, 5);
             materialSample.put(MaterialType.Iron, 5);
             materialSample.put(MaterialType.Carbon, 5);
         }
-        if (turn == 80){
+        if (turn == 80) {
             materialSample.put(MaterialType.Powder, 5);
             materialSample.put(MaterialType.Iron, 5);
             materialSample.put(MaterialType.Carbon, 5);
         }
         addToWantedMaterial(materialSample);
         runWareHouseAgent();
+
         HashMap<AmmoType, Integer> ammoSample = new HashMap<>();
-        ammoSample.put(AmmoType.RifleBullet, 1);
-        ammoSample.put(AmmoType.HMGBullet, 2);
+        ammoSample.put(AmmoType.RifleBullet, 0);
+        ammoSample.put(AmmoType.HMGBullet, 0);
         ammoSample.put(AmmoType.GoldenTankShell, 0);
         ammoSample.put(AmmoType.MortarShell, 0);
         ammoSample.put(AmmoType.TankShell, 0);
-        runFactoryAgent(ammoSample);
+        addToWantedAmmo(ammoSample);
+        runFactoryAgent();
 
     }
 
@@ -108,60 +148,71 @@ public class AI extends RealtimeAI<World, KSObject> {
         } else if (base.getCArea().get(wagent.getPosition()) == ECell.Material) {
             Material material = base.getWarehouse().getMaterials().get(wagent.getPosition());
             var materialType = material.getType();
-            if (wantedMaterial.get(materialType) > 0 && material.getCount() > 0 && forwardWagent) {
+            if (wantedMaterial.get(materialType) > 0 && material.getCount() > 0 && forwardWagent && getSumBagMaterial(wagent.getMaterialsBag()) < wagent.getCMaterialsBagCapacity()) {
                 warehouseAgentPickMaterial();
                 wantedMaterial.put(materialType, wantedMaterial.get(materialType) - 1);
-            }
-            else
+            } else
                 warehouseAgentMove(forwardWagent);
-        }
+        } else
+            warehouseAgentMove(forwardWagent);
     }
 
     boolean forwardFagent = false;
-    boolean moveFagent = false;
-    Position prePosition;
     HashMap<AmmoType, Integer> preparingAmmo = new HashMap<>();
 
-    void runFactoryAgent(HashMap<AmmoType, Integer> wantedAmmo) {
+    void runFactoryAgent() {
         if (base.getCArea().get(fagent.getPosition()) == ECell.BacklineDelivery) {
-            if (getSumBagMaterial(base.getBacklineDelivery().getMaterials()) > 0)
-                factoryAgentPickMaterial(base.getBacklineDelivery().getMaterials());
-            else if (getSumBagAmmo(fagent.getAmmosBag()) > 0) {
+            forwardFagent = true;
+            if (getSumBagAmmo(fagent.getAmmosBag()) > 0)
                 factoryAgentPutAmmo();
-            } else {
-                forwardFagent = true;
-                factoryAgentMove(true);
-                moveFagent = true;
-            }
-        } else {
-            if (moveFagent && prePosition.getIndex().intValue() == fagent.getPosition().getIndex().intValue())
-                forwardFagent = false;
-            factoryAgentMove(forwardFagent);
-            moveFagent = true;
-            if (base.getCArea().get(fagent.getPosition()) == ECell.Machine) {
-                Machine machine = base.getFactory().getMachines().get(fagent.getPosition());
-                var machineStatus = machine.getStatus();
-                if (machineStatus == MachineStatus.AmmoReady) {
-                    preparingAmmo.put(machine.getCurrentAmmo(), preparingAmmo.get(machine.getCurrentAmmo()) + 1);
-                    factoryAgentPickAmmo();
-                    moveFagent = false;
-                } else if (machineStatus == MachineStatus.Idle) {
-                    for (AmmoType ammoType : AmmoType.values()) {
-                        Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
-                        if (!preparingAmmo.containsKey(ammoType))
-                            preparingAmmo.put(ammoType, 0);
-                        if (preparingAmmo.get(ammoType) < wantedAmmo.get(ammoType) && isSubBag(requireMaterial, fagent.getMaterialsBag())) {
-                            factoryAgentPutMaterial(ammoType);
-                            preparingAmmo.put(ammoType, preparingAmmo.get(ammoType) + 1);
-                            moveFagent = false;
-                            break;
-                        }
+            else if (getSumBagMaterial(base.getBacklineDelivery().getMaterials()) > 0)
+                factoryAgentPickMaterial(fagentPickMaterialList());
+            else {
+                boolean canBuild = false;
+                for (AmmoType ammoType : AmmoType.values()) {
+                    Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
+                    if (isSubBag(requireMaterial, fagent.getMaterialsBag())) {
+                        canBuild = true;
+                        break;
+                    }
+                }
+                for (Machine machine : base.getFactory().getMachines().values()) {
+                    if (machine == null)
+                        continue;
+                    if (machine.getStatus() == MachineStatus.AmmoReady || (machine.getStatus() == MachineStatus.Idle && canBuild) || (machine.getStatus() == MachineStatus.Working && abs(machine.getPosition().getIndex().intValue() - fagent.getPosition().getIndex().intValue()) >= machine.getConstructionRemTime())) {
+                        factoryAgentMove(forwardFagent);
+                        break;
                     }
                 }
             }
-
+        } else if (base.getCArea().get(fagent.getPosition()) == ECell.Machine) {
+            if (fagent.getPosition().getIndex() == lastMachineIndex)
+                forwardFagent = false;
+            Machine machine = base.getFactory().getMachines().get(fagent.getPosition());
+            var machineStatus = machine.getStatus();
+            if (machineStatus == MachineStatus.AmmoReady) {
+                preparingAmmo.put(machine.getCurrentAmmo(), preparingAmmo.get(machine.getCurrentAmmo()) + 1);
+                factoryAgentPickAmmo();
+            } else if (machineStatus == MachineStatus.Idle) {
+                boolean isBuild = false;
+                for (AmmoType ammoType : AmmoType.values()) {
+                    Map<MaterialType, Integer> requireMaterial = base.getFactory().getCMixtureFormulas().get(ammoType);
+                    if (wantedAmmo.get(ammoType) > 0 && isSubBag(requireMaterial, fagent.getMaterialsBag())) {
+                        factoryAgentPutMaterial(ammoType);
+                        wantedAmmo.put(ammoType, wantedAmmo.get(ammoType) - 1);
+                        isBuild = true;
+                        break;
+                    }
+                }
+                if (!isBuild)
+                    factoryAgentMove(forwardFagent);
+            } else if (machineStatus == MachineStatus.Working) {
+                if (machine.getConstructionRemTime() > 1)
+                    factoryAgentMove(forwardFagent);
+            }
+        } else if (base.getCArea().get(fagent.getPosition()) == ECell.Empty) {
+            factoryAgentMove(forwardFagent);
         }
-        prePosition = fagent.getPosition();
     }
 
     public int getSumBagMaterial(Map<MaterialType, Integer> bag) {
